@@ -20,7 +20,8 @@ class SettingsPreferences(context: Context) {
         val demoBalance = prefs.getFloat("demo_balance", 10000.0f).toDouble()
         val apiKey = prefs.getString("mexc_api_key", "") ?: ""
         val secretKey = prefs.getString("mexc_api_secret", "") ?: ""
-        val scannedCoinsCount = prefs.getInt("scanned_coins_count", 10)
+        val savedScanCount = prefs.getInt("scanned_coins_count", 10)
+        val scannedCoinsCount = listOf(10, 100, 200, 300, 400).minByOrNull { kotlin.math.abs(it - savedScanCount) } ?: 10
         val refTf = prefs.getString("reference_timeframe", "4h") ?: "4h"
         val entryTf = prefs.getString("entry_timeframe", "15m") ?: "15m"
         val orderAmount = prefs.getFloat("order_amount_usdt", 100.0f).toDouble()

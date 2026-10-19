@@ -208,6 +208,11 @@ class TradingRepository(
         customSl: Double? = null,
         customTp: Double? = null
     ): Result<TradePosition> = withContext(Dispatchers.IO) {
+        if (side == TradeSide.SELL) {
+            return@withContext Result.failure(
+                Exception("التطبيق يعمل Spot فقط: إشارة البيع لا تفتح صفقة بيع قصيرة. استخدم إغلاق الصفقة لبيع الكمية المشتراة.")
+            )
+        }
         val settings = _userSettings.value
         val ticker = _tickers.value[symbol]
         val currentPrice = ticker?.lastPriceDouble ?: 0.0

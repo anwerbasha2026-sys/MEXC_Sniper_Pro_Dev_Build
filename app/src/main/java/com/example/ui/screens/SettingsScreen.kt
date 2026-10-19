@@ -340,12 +340,43 @@ fun SettingsScreen(
                             fontWeight = FontWeight.Bold
                         )
                     }
-                    Slider(
-                        value = scannedCoinsCount,
-                        onValueChange = { scannedCoinsCount = it },
-                        valueRange = 3f..15f,
-                        steps = 11,
-                        colors = SliderDefaults.colors(thumbColor = BrandCyan, activeTrackColor = BrandCyan)
+                    // Discrete market-universe sizes. The scanner ranks eligible USDT Spot pairs by 24h quote volume.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(10, 100, 200, 300, 400).forEach { count ->
+                            val selected = scannedCoinsCount.toInt() == count
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .background(
+                                        if (selected) BrandCyan.copy(alpha = 0.18f) else DarkSurfaceElevated,
+                                        RoundedCornerShape(8.dp)
+                                    )
+                                    .border(
+                                        1.dp,
+                                        if (selected) BrandCyan else DarkCardBorder,
+                                        RoundedCornerShape(8.dp)
+                                    )
+                                    .clickable { scannedCoinsCount = count.toFloat() }
+                                    .padding(vertical = 10.dp)
+                                    .testTag("scan_count_$count"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = count.toString(),
+                                    color = if (selected) BrandCyan else TextSecondary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        text = "يتم اختيار الأزواج الأعلى سيولة من سوق USDT Spot تلقائياً؛ لا يقتصر الفحص على قائمة ثابتة.",
+                        color = TextMuted,
+                        fontSize = 10.sp
                     )
 
                     Spacer(modifier = Modifier.height(10.dp))

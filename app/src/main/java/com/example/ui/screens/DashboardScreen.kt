@@ -370,20 +370,23 @@ fun DashboardScreen(
 
                                     Button(
                                         onClick = {
-                                            viewModel.executeInstantOrder(
-                                                symbol = sig.symbol,
-                                                side = if (isBuy) TradeSide.BUY else TradeSide.SELL,
-                                                amountUsdt = userSettings.orderAmountUsdt,
-                                                customSl = sig.stopLoss,
-                                                customTp = sig.takeProfit
-                                            )
+                                            if (isBuy) {
+                                                viewModel.executeInstantOrder(
+                                                    symbol = sig.symbol,
+                                                    side = TradeSide.BUY,
+                                                    amountUsdt = userSettings.orderAmountUsdt,
+                                                    customSl = sig.stopLoss,
+                                                    customTp = sig.takeProfit
+                                                )
+                                            }
                                         },
+                                        enabled = isBuy,
                                         modifier = Modifier.weight(1f).height(38.dp),
                                         shape = RoundedCornerShape(8.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = signalColor)
                                     ) {
                                         Text(
-                                            text = "تنفيذ فوري (${userSettings.orderAmountUsdt}$)",
+                                            text = if (isBuy) "شراء فوري (${userSettings.orderAmountUsdt}$)" else "إشارة بيع فقط — Spot",
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.Black

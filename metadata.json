@@ -1,0 +1,6 @@
+{
+  "name": "MEXC Trader",
+  "description": "تطبيق تداول احترافي فوري وتجريبي على منصة ميكس مدعوم باستراتيجية مصيدة السيولة مع أسعار حية ولوحة تحكم متقدمة.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

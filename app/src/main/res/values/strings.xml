@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">ميكس تريدر</string>
+    <string name="tab_dashboard">الرئيسية</string>
+    <string name="tab_chart">الشارت والتداول</string>
+    <string name="tab_positions">الصفقات</string>
+    <string name="tab_settings">لوحة التحكم</string>
+    <string name="mode_demo">تداول تجريبي</string>
+    <string name="mode_live">تداول حقيقي (MEXC)</string>
+    <string name="strategy_name">استراتيجية مصيدة السيولة</string>
+    <string name="strategy_desc">Liquidity Trap Strategy (4H Box / 15m Entry)</string>
+</resources>

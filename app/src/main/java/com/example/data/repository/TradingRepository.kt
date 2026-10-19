@@ -122,8 +122,28 @@ class TradingRepository(
 
     suspend fun runScanner() = withContext(Dispatchers.IO) {
         val settings = _userSettings.value
-        val coinsToScan = settings.selectedCoins.take(settings.scannedCoinsCount)
         val tickerMap = _tickers.value
+        // Build the scan universe dynamically from live MEXC USDT Spot tickers.
+        // Rank by 24h quote volume so selecting 100/200/300/400 actually scans that many liquid pairs,
+        // rather than being limited by the default ten-item watchlist.
+        val excludedStableBases = setOf("USDC", "BUSD", "TUSD", "FDUSD", "USDP", "DAI", "EUR", "TRY")
+        val leveragedSuffixes = listOf("UP", "DOWN", "BULL", "BEAR", "3L", "3S", "5L", "5S")
+        val coinsToScan = tickerMap.values.asSequence()
+            .filter { ticker ->
+                val symbol = ticker.symbol
+                val base = symbol.removeSuffix("USDT")
+                symbol.endsWith("USDT") &&
+                    base.isNotBlank() &&
+                    base !in excludedStableBases &&
+                    leveragedSuffixes.none { base.endsWith(it) } &&
+                    ticker.lastPriceDouble > 0.0 &&
+                    ticker.quoteVolumeDouble > 0.0
+            }
+            .sortedByDescending { it.quoteVolumeDouble }
+            .take(settings.scannedCoinsCount.coerceIn(10, 400))
+            .map { it.symbol }
+            .toList()
+            .ifEmpty { settings.selectedCoins.take(settings.scannedCoinsCount.coerceIn(10, 400)) }
 
         val results = mutableListOf<CoinStrategyAnalysis>()
 
@@ -159,20 +179,20 @@ class TradingRepository(
     }
 
     private suspend fun checkAndAutoTrade(analysis: CoinStrategyAnalysis) {
-        if (analysis.signalSide == SignalSide.NONE) return
+        // This application is Spot-only: a SELL signal is not a short-selling instruction.
+        // Automatic entries are BUY orders only; exits must sell the acquired base-asset quantity.
+        if (analysis.signalSide != SignalSide.BUY) return
 
         val currentOpen = tradeDao.getOpenTrades().firstOrNull() ?: emptyList()
         val settings = _userSettings.value
-        if (currentOpen.size >= settings.maxConcurrentTrades) return
+        if (!settings.autoTradeEnabled || currentOpen.size >= settings.maxConcurrentTrades) return
 
         val alreadyOpenForSymbol = currentOpen.any { it.symbol == analysis.symbol }
         if (alreadyOpenForSymbol) return
 
-        // Auto execute!
-        val side = if (analysis.signalSide == SignalSide.BUY) TradeSide.BUY else TradeSide.SELL
         placeInstantTrade(
             symbol = analysis.symbol,
-            side = side,
+            side = TradeSide.BUY,
             amountUsdt = settings.orderAmountUsdt,
             customSl = analysis.stopLoss,
             customTp = analysis.takeProfit

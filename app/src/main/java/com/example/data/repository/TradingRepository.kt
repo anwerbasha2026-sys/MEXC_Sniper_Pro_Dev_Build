@@ -24,6 +24,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.util.UUID
 
 class TradingRepository(
@@ -312,6 +314,16 @@ class TradingRepository(
         val pnl = calculatePnl(domain.side, domain.entryPrice, currentPrice, domain.quantity)
         val pnlPercent = if (domain.amountUsdt > 0) (pnl / domain.amountUsdt) * 100.0 else 0.0
 
+        // A live Spot position must be sold on the exchange before it is marked closed locally.
+        if (!domain.isDemo) {
+            val sellResult = executeLiveSpotSell(domain)
+            if (sellResult.isFailure) {
+                return@withContext Result.failure(
+                    Exception("لم تُغلق الصفقة على المنصة؛ بقيت مفتوحة في التطبيق. ${sellResult.exceptionOrNull()?.message ?: ""}")
+                )
+            }
+        }
+
         val updated = domain.copy(
             status = if (manualClose) TradeStatus.CLOSED_MANUAL else domain.status,
             closeTime = System.currentTimeMillis(),
@@ -407,6 +419,20 @@ class TradingRepository(
             }
 
             if (statusToSet != null) {
+                // Do not report a live position as closed until the Spot market-sell order succeeds.
+                if (!trade.isDemo) {
+                    val sellResult = executeLiveSpotSell(trade)
+                    if (sellResult.isFailure) {
+                        val stillOpen = trade.copy(
+                            currentPrice = livePrice,
+                            pnlUsdt = pnl,
+                            pnlPercent = pnlPercent
+                        )
+                        tradeDao.updateTrade(TradeEntity.fromDomain(stillOpen))
+                        continue
+                    }
+                }
+
                 val closedTrade = trade.copy(
                     status = statusToSet,
                     closeTime = System.currentTimeMillis(),
@@ -432,6 +458,50 @@ class TradingRepository(
                 )
                 tradeDao.updateTrade(TradeEntity.fromDomain(updated))
             }
+        }
+    }
+
+    private suspend fun executeLiveSpotSell(trade: TradePosition): Result<Unit> {
+        val settings = _userSettings.value
+        if (settings.mexcApiKey.isBlank() || settings.mexcApiSecret.isBlank()) {
+            return Result.failure(Exception("مفاتيح API غير موجودة"))
+        }
+        if (trade.side != TradeSide.BUY) {
+            return Result.failure(Exception("الإغلاق الآلي مدعوم لصفقات شراء Spot فقط"))
+        }
+
+        return try {
+            // MEXC market SELL orders require the base-asset quantity, not quoteOrderQty.
+            val quantityDecimal = BigDecimal.valueOf(trade.quantity)
+                .setScale(8, RoundingMode.DOWN)
+                .stripTrailingZeros()
+            if (quantityDecimal.signum() <= 0) {
+                return Result.failure(Exception("كمية البيع غير صالحة"))
+            }
+            val quantityText = quantityDecimal.toPlainString()
+            val timestamp = apiService.getServerTime().serverTime
+            val queryString = "symbol=${trade.symbol}&side=SELL&type=MARKET&quantity=$quantityText&timestamp=$timestamp&recvWindow=10000"
+            val signature = MexcSignatureHelper.createHmacSha256(queryString, settings.mexcApiSecret)
+            val response = apiService.placeOrder(
+                apiKey = settings.mexcApiKey,
+                symbol = trade.symbol,
+                side = "SELL",
+                type = "MARKET",
+                quantity = quantityText.toDouble(),
+                timestamp = timestamp,
+                signature = signature
+            )
+            if (response.code != null && response.code != 200 && response.code != 0) {
+                Result.failure(Exception("رفضت MEXC أمر البيع: ${response.msg ?: response.code}"))
+            } else if ((response.executedQty?.toDoubleOrNull() ?: 0.0) <= 0.0 &&
+                !response.status.equals("FILLED", ignoreCase = true)
+            ) {
+                Result.failure(Exception("لم تؤكد MEXC تنفيذ كمية البيع"))
+            } else {
+                Result.success(Unit)
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception("تعذر تنفيذ بيع Spot على MEXC: ${e.message ?: "خطأ غير معروف"}"))
         }
     }
 

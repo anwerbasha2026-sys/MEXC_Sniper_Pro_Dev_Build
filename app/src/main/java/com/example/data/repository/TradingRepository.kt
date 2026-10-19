@@ -287,10 +287,12 @@ class TradingRepository(
                     symbol = symbol,
                     side = side,
                     isDemo = false,
-                    entryPrice = currentPrice,
+                    entryPrice = response.price?.toDoubleOrNull()?.takeIf { it > 0.0 } ?: currentPrice,
                     currentPrice = currentPrice,
                     amountUsdt = amountUsdt,
-                    quantity = quantity,
+                    // Prefer the exchange-reported fill quantity so automated exit does not oversell
+                    // due to market slippage or quote-amount rounding.
+                    quantity = response.executedQty?.toDoubleOrNull()?.takeIf { it > 0.0 } ?: quantity,
                     stopLoss = sl,
                     takeProfit = tp,
                     status = TradeStatus.OPEN,

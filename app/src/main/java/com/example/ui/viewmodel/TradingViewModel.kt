@@ -64,6 +64,7 @@ class TradingViewModel(application: Application) : AndroidViewModel(application)
     val userMessage: SharedFlow<String> = _userMessage.asSharedFlow()
 
     private var pollingJob: Job? = null
+    private var scannerJob: Job? = null
     private var chartJob: Job? = null
 
     init {
@@ -73,22 +74,33 @@ class TradingViewModel(application: Application) : AndroidViewModel(application)
 
     private fun startPolling() {
         pollingJob?.cancel()
+        scannerJob?.cancel()
+
+        // Keep prices and open-position exits updating independently from the longer market scan.
         pollingJob = viewModelScope.launch {
-            // Initial checks
             repository.testMexcConnection()
-            var tickCount = 0
             while (isActive) {
                 try {
                     repository.fetchMarketTickers()
-                    // Every ~12 seconds (every 4 loops of 3s), re-run strategy scanner
-                    if (tickCount % 4 == 0) {
-                        repository.runScanner()
-                    }
-                    tickCount++
                 } catch (e: Exception) {
-                    // Ignore transient network errors
+                    // Ignore transient network errors and retry on the next polling cycle.
                 }
                 delay(3000)
+            }
+        }
+
+        // A 400-pair scan can require hundreds of candle requests. Run it separately and
+        // start the next pass 60 seconds after the previous pass finishes to avoid overlap.
+        scannerJob = viewModelScope.launch {
+            while (isActive) {
+                try {
+                    if (repository.tickers.value.isNotEmpty()) {
+                        repository.runScanner()
+                    }
+                } catch (e: Exception) {
+                    // Keep the scanner alive after transient API/rate-limit errors.
+                }
+                delay(60_000)
             }
         }
     }
@@ -220,6 +232,7 @@ class TradingViewModel(application: Application) : AndroidViewModel(application)
     override fun onCleared() {
         super.onCleared()
         pollingJob?.cancel()
+        scannerJob?.cancel()
         chartJob?.cancel()
     }
 }

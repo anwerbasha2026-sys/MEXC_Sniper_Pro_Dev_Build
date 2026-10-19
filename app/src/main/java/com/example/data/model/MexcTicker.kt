@@ -21,6 +21,7 @@ data class Mexc24HrTicker(
     val highDouble: Double get() = highPrice?.toDoubleOrNull() ?: 0.0
     val lowDouble: Double get() = lowPrice?.toDoubleOrNull() ?: 0.0
     val volumeDouble: Double get() = volume?.toDoubleOrNull() ?: 0.0
+    val quoteVolumeDouble: Double get() = quoteVolume?.toDoubleOrNull() ?: 0.0
 }
 
 @JsonClass(generateAdapter = true)
